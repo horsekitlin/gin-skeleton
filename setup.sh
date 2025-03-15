@@ -111,6 +111,7 @@ replace_import_paths() {
     
     # 替換匯入路徑
     for file in $go_files; do
+        sed -i "s|github.com/yourusername/project|$project_name|g" $file
         sed -i "s|github.com/yourusername/shoppingcart|$project_name|g" $file
         print_info "已處理: $file"
     done
@@ -118,12 +119,14 @@ replace_import_paths() {
     # 替換 Dockerfile 中的路徑
     docker_files=$(find ./deployments -name "*.Dockerfile" -type f)
     for file in $docker_files; do
+        sed -i "s|github.com/yourusername/project|$project_name|g" $file
         sed -i "s|github.com/yourusername/shoppingcart|$project_name|g" $file
         print_info "已處理: $file"
     done
     
     # 替換 docker-compose.yaml 中的路徑
     if [ -f "./deployments/docker/docker-compose.yaml" ]; then
+        sed -i "s|github.com/yourusername/project|$project_name|g" ./deployments/docker/docker-compose.yaml
         sed -i "s|github.com/yourusername/shoppingcart|$project_name|g" ./deployments/docker/docker-compose.yaml
         print_info "已處理: ./deployments/docker/docker-compose.yaml"
     fi
@@ -137,10 +140,6 @@ install_dependencies() {
     
     go mod tidy
     
-    go get github.com/joho/godotenv
-    go get github.com/nacos-group/nacos-sdk-go
-    go get go.uber.org/fx
-
     if [ $? -ne 0 ]; then
         print_warning "部分依賴套件可能安裝失敗，請手動檢查"
     else
@@ -185,3 +184,5 @@ main() {
     show_completion
 }
 
+# 執行主程序
+main
