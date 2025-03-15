@@ -24,6 +24,18 @@ print_error() {
     echo -e "${RED}Error:${NC} $1"
 }
 
+# 檢測操作系統類型
+detect_os() {
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        OS_TYPE="macos"
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        OS_TYPE="linux"
+    else
+        OS_TYPE="other"
+    fi
+    print_info "檢測到操作系統: $OS_TYPE"
+}
+
 # 檢查必要的命令是否存在
 check_requirements() {
     print_step "檢查必要的命令..."
@@ -38,13 +50,8 @@ check_requirements() {
         exit 1
     fi
     
-    if ! command -v xargs &> /dev/null; then
-        print_error "xargs 命令不存在"
-        exit 1
-    fi
-    
-    if ! command -v sed &> /dev/null; then
-        print_error "sed 命令不存在"
+    if ! command -v grep &> /dev/null; then
+        print_error "grep 命令不存在"
         exit 1
     fi
     
@@ -106,32 +113,83 @@ init_go_module() {
 replace_import_paths() {
     print_step "替換所有檔案中的匯入路徑..."
     
-    # 搜尋所有 .go 檔案
-    go_files=$(find . -name "*.go" -type f)
-    
-    # 替換匯入路徑
-    for file in $go_files; do
-        sed -i "s|github.com/yourusername/project|$project_name|g" $file
-        sed -i "s|github.com/yourusername/shoppingcart|$project_name|g" $file
+    # 處理所有 .go 文件
+    find . -type f -name "*.go" | while read file; do
+        if [ "$OS_TYPE" == "macos" ]; then
+            # macOS 使用 BSD sed
+            sed -i '' "s|github.com/yourusername/project|$project_name|g" "$file"
+            sed -i '' "s|github.com/yourusername/shoppingcart|$project_name|g" "$file"
+        else
+            # Linux 使用 GNU sed
+            sed -i "s|github.com/yourusername/project|$project_name|g" "$file"
+            sed -i "s|github.com/yourusername/shoppingcart|$project_name|g" "$file"
+        fi
         print_info "已處理: $file"
     done
     
-    # 替換 Dockerfile 中的路徑
-    docker_files=$(find ./deployments -name "*.Dockerfile" -type f)
-    for file in $docker_files; do
-        sed -i "s|github.com/yourusername/project|$project_name|g" $file
-        sed -i "s|github.com/yourusername/shoppingcart|$project_name|g" $file
+    # 處理所有 Dockerfile 文件
+    find ./deployments -type f -name "*.Dockerfile" | while read file; do
+        if [ "$OS_TYPE" == "macos" ]; then
+            sed -i '' "s|github.com/yourusername/project|$project_name|g" "$file"
+            sed -i '' "s|github.com/yourusername/shoppingcart|$project_name|g" "$file"
+        else
+            sed -i "s|github.com/yourusername/project|$project_name|g" "$file"
+            sed -i "s|github.com/yourusername/shoppingcart|$project_name|g" "$file"
+        fi
         print_info "已處理: $file"
     done
     
-    # 替換 docker-compose.yaml 中的路徑
+    # 處理 docker-compose.yaml
     if [ -f "./deployments/docker/docker-compose.yaml" ]; then
-        sed -i "s|github.com/yourusername/project|$project_name|g" ./deployments/docker/docker-compose.yaml
-        sed -i "s|github.com/yourusername/shoppingcart|$project_name|g" ./deployments/docker/docker-compose.yaml
+        if [ "$OS_TYPE" == "macos" ]; then
+            sed -i '' "s|github.com/yourusername/project|$project_name|g" "./deployments/docker/docker-compose.yaml"
+            sed -i '' "s|github.com/yourusername/shoppingcart|$project_name|g" "./deployments/docker/docker-compose.yaml"
+        else
+            sed -i "s|github.com/yourusername/project|$project_name|g" "./deployments/docker/docker-compose.yaml"
+            sed -i "s|github.com/yourusername/shoppingcart|$project_name|g" "./deployments/docker/docker-compose.yaml"
+        fi
         print_info "已處理: ./deployments/docker/docker-compose.yaml"
     fi
     
     print_info "匯入路徑替換完成"
+}
+
+# 檢查是否有未替換的匯入路徑
+check_import_paths() {
+    print_step "檢查是否有未替換的匯入路徑..."
+    
+    # 檢查是否有未替換的 import 路徑
+    UNFIXED_IMPORTS=$(grep -r "github.com/yourusername" --include="*.go" . || true)
+    
+    if [ -n "$UNFIXED_IMPORTS" ]; then
+        print_warning "存在未替換的匯入路徑，嘗試再次替換..."
+        
+        # 再次嘗試替換
+        find . -type f -name "*.go" | while read file; do
+            if [ "$OS_TYPE" == "macos" ]; then
+                sed -i '' "s|github.com/yourusername/project|$project_name|g" "$file"
+                sed -i '' "s|github.com/yourusername/shoppingcart|$project_name|g" "$file"
+                # 添加更多可能的模式以防萬一
+                sed -i '' "s|\"github.com/yourusername|\"$project_name|g" "$file"
+            else
+                sed -i "s|github.com/yourusername/project|$project_name|g" "$file"
+                sed -i "s|github.com/yourusername/shoppingcart|$project_name|g" "$file"
+                # 添加更多可能的模式以防萬一
+                sed -i "s|\"github.com/yourusername|\"$project_name|g" "$file"
+            fi
+        done
+        
+        # 再次檢查
+        UNFIXED_IMPORTS=$(grep -r "github.com/yourusername" --include="*.go" . || true)
+        if [ -n "$UNFIXED_IMPORTS" ]; then
+            print_warning "仍有部分匯入路徑未替換，可能需要手動檢查："
+            echo "$UNFIXED_IMPORTS"
+        else
+            print_info "所有匯入路徑已替換成功"
+        fi
+    else
+        print_info "所有匯入路徑已替換成功"
+    fi
 }
 
 # 安裝依賴套件
@@ -174,11 +232,13 @@ main() {
     echo -e "${GREEN}=================================${NC}"
     echo ""
     
+    detect_os
     check_requirements
     read_project_name
     move_template_files
     init_go_module
     replace_import_paths
+    check_import_paths
     install_dependencies
     cleanup
     show_completion
