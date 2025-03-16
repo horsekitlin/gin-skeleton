@@ -7,7 +7,6 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 PROJECT_NAME=""
-OS_TYPE=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 TEMPLATE_DIR="${SCRIPT_DIR}/template"
 
@@ -26,14 +25,6 @@ print_warning() {
 print_error() {
     echo -e "${RED}Error:${NC} $1"
 }
-
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    OS_TYPE="macos"
-    SED_CMD="sed -i ''"
-else
-    OS_TYPE="linux"
-    SED_CMD="sed -i"
-fi
 
 print_step "檢查模板目錄..."
 if [ ! -d "$TEMPLATE_DIR" ]; then
@@ -70,11 +61,19 @@ find "$TEMPLATE_DIR" -type f -not -path "*/.git*" | while read file; do
 done
 
 print_step "替換匯入路徑..."
-find . -type f -name "*.go" -not -path "./template/*" | while read file; do
-    $SED_CMD "s|github.com/yourusername/project|$PROJECT_NAME|g" "$file"
-    $SED_CMD "s|github.com/yourusername/shoppingcart|$PROJECT_NAME|g" "$file"
-    $SED_CMD "s|\"github.com/yourusername|\"$PROJECT_NAME|g" "$file"
-done
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    find . -type f -name "*.go" -not -path "./template/*" | while read file; do
+        sed -i '' "s|github.com/yourusername/project|$PROJECT_NAME|g" "$file"
+        sed -i '' "s|github.com/yourusername/shoppingcart|$PROJECT_NAME|g" "$file"
+        sed -i '' "s|\"github.com/yourusername|\"$PROJECT_NAME|g" "$file"
+    done
+else
+    find . -type f -name "*.go" -not -path "./template/*" | while read file; do
+        sed -i "s|github.com/yourusername/project|$PROJECT_NAME|g" "$file"
+        sed -i "s|github.com/yourusername/shoppingcart|$PROJECT_NAME|g" "$file"
+        sed -i "s|\"github.com/yourusername|\"$PROJECT_NAME|g" "$file"
+    done
+fi
 
 print_step "初始化 Go 模組..."
 if [ -f go.mod ]; then
@@ -85,15 +84,41 @@ go mod init $PROJECT_NAME
 print_step "安裝依賴..."
 go mod tidy
 
-if command -v swag &> /dev/null; then
-    print_step "初始化 Swagger 文檔..."
-    mkdir -p docs
-    swag init -g main.go --output docs
+print_step "修復 docs 引用問題..."
+mkdir -p docs
+touch docs/docs.go
+cat > docs/docs.go << EOF
+package docs
+
+import (
+	"github.com/swaggo/swag"
+)
+
+var SwaggerInfo = &swag.Spec{
+	Version:          "1.0",
+	Host:             "localhost:8080",
+	BasePath:         "/api/v1",
+	Schemes:          []string{"http", "https"},
+	Title:            "$PROJECT_NAME API",
+	Description:      "This is the API server for $PROJECT_NAME.",
+}
+
+func init() {
+	swag.Register(SwaggerInfo.InstanceName(), SwaggerInfo)
+}
+EOF
+
+print_step "更新 main.go 檔案..."
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    sed -i '' "s|_ \"$PROJECT_NAME/docs\"|_ \"$PROJECT_NAME/docs\" // swagger docs|g" main.go
+else
+    sed -i "s|_ \"$PROJECT_NAME/docs\"|_ \"$PROJECT_NAME/docs\" // swagger docs|g" main.go
 fi
 
 print_step "清理模板..."
 read -p "是否刪除 template 目錄和 setup.sh？(y/n): " answer
 if [[ "$answer" == "y" || "$answer" == "Y" ]]; then
+    find . -type f -name "*''" -delete
     rm -rf "$TEMPLATE_DIR"
     rm "$SCRIPT_DIR/setup.sh"
     print_info "清理完成"
