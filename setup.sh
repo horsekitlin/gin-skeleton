@@ -81,26 +81,26 @@ if [ -f go.mod ]; then
 fi
 go mod init $PROJECT_NAME
 
-print_step "安裝依賴..."
+print_step "安裝依賴套件..."
+go get -u github.com/swaggo/swag/cmd/swag
+go get -u github.com/swaggo/gin-swagger
+go get -u github.com/swaggo/files
 go mod tidy
 
-print_step "修復 docs 引用問題..."
+print_step "建立 docs 目錄..."
 mkdir -p docs
-touch docs/docs.go
 cat > docs/docs.go << EOF
 package docs
 
-import (
-	"github.com/swaggo/swag"
-)
+import "github.com/swaggo/swag"
 
 var SwaggerInfo = &swag.Spec{
-	Version:          "1.0",
-	Host:             "localhost:8080",
-	BasePath:         "/api/v1",
-	Schemes:          []string{"http", "https"},
-	Title:            "$PROJECT_NAME API",
-	Description:      "This is the API server for $PROJECT_NAME.",
+	Version: "1.0",
+	Host: "localhost:8080",
+	BasePath: "/api/v1",
+	Schemes: []string{"http", "https"},
+	Title: "$PROJECT_NAME API",
+	Description: "API for $PROJECT_NAME",
 }
 
 func init() {
@@ -108,17 +108,12 @@ func init() {
 }
 EOF
 
-print_step "更新 main.go 檔案..."
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    sed -i '' "s|_ \"$PROJECT_NAME/docs\"|_ \"$PROJECT_NAME/docs\" // swagger docs|g" main.go
-else
-    sed -i "s|_ \"$PROJECT_NAME/docs\"|_ \"$PROJECT_NAME/docs\" // swagger docs|g" main.go
-fi
+print_step "清理重複檔案..."
+find . -name "*''" -delete
 
 print_step "清理模板..."
 read -p "是否刪除 template 目錄和 setup.sh？(y/n): " answer
 if [[ "$answer" == "y" || "$answer" == "Y" ]]; then
-    find . -type f -name "*''" -delete
     rm -rf "$TEMPLATE_DIR"
     rm "$SCRIPT_DIR/setup.sh"
     print_info "清理完成"
