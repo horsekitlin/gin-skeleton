@@ -3,11 +3,11 @@ package handler
 import (
 	"fmt"
 	"net/http"
-	"passontw-slot-game/internal/config"
-	"passontw-slot-game/internal/interfaces"
-	"passontw-slot-game/internal/middleware"
-	"passontw-slot-game/internal/service"
-	"passontw-slot-game/pkg/websocketManager"
+	"github.com/yourusername/project/internal/config"
+	"github.com/yourusername/project/internal/interfaces"
+	"github.com/yourusername/project/internal/middleware"
+	"github.com/yourusername/project/internal/service"
+	"github.com/yourusername/project/pkg/websocketManager"
 
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"

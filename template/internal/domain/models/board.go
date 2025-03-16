@@ -2,7 +2,7 @@ package models
 
 import (
 	"fmt"
-	"passontw-slot-game/internal/domain"
+	"github.com/yourusername/project/internal/domain"
 )
 
 type Board [3][3]domain.Symbol

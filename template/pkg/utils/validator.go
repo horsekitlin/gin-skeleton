@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"passontw-slot-game/internal/interfaces/types"
+	"github.com/yourusername/project/internal/interfaces/types"
 
 	"github.com/go-playground/validator/v10"
 )

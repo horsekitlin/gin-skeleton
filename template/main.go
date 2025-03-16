@@ -2,13 +2,13 @@ package main
 
 import (
 	"log"
-	"passontw-slot-game/internal/config"
-	"passontw-slot-game/internal/handler"
-	"passontw-slot-game/internal/service"
+	"github.com/yourusername/project/internal/config"
+	"github.com/yourusername/project/internal/handler"
+	"github.com/yourusername/project/internal/service"
 
-	_ "passontw-slot-game/docs"
-	"passontw-slot-game/pkg/core"
-	"passontw-slot-game/pkg/utils"
+	_ "github.com/yourusername/project/docs"
+	"github.com/yourusername/project/pkg/core"
+	"github.com/yourusername/project/pkg/utils"
 
 	"go.uber.org/fx"
 )

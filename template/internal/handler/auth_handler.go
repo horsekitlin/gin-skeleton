@@ -2,8 +2,8 @@ package handler
 
 import (
 	"net/http"
-	"passontw-slot-game/internal/interfaces"
-	"passontw-slot-game/internal/service"
+	"github.com/yourusername/project/internal/interfaces"
+	"github.com/yourusername/project/internal/service"
 	"strings"
 
 	"github.com/gin-gonic/gin"

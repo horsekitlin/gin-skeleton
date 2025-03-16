@@ -3,8 +3,8 @@ package config
 import (
 	"context"
 	"fmt"
-	"passontw-slot-game/pkg/logger"
-	"passontw-slot-game/pkg/nacosManager"
+	"github.com/yourusername/project/pkg/logger"
+	"github.com/yourusername/project/pkg/nacosManager"
 
 	"go.uber.org/fx"
 	"gopkg.in/yaml.v3"

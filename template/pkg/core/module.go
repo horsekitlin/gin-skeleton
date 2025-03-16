@@ -2,13 +2,13 @@ package core
 
 import (
 	"context"
-	"passontw-slot-game/internal/config"
-	"passontw-slot-game/internal/service"
-	"passontw-slot-game/pkg/databaseManager"
-	"passontw-slot-game/pkg/logger"
-	"passontw-slot-game/pkg/nacosManager"
-	redis "passontw-slot-game/pkg/redisManager"
-	"passontw-slot-game/pkg/websocketManager"
+	"github.com/yourusername/project/internal/config"
+	"github.com/yourusername/project/internal/service"
+	"github.com/yourusername/project/pkg/databaseManager"
+	"github.com/yourusername/project/pkg/logger"
+	"github.com/yourusername/project/pkg/nacosManager"
+	redis "github.com/yourusername/project/pkg/redisManager"
+	"github.com/yourusername/project/pkg/websocketManager"
 
 	"go.uber.org/fx"
 )

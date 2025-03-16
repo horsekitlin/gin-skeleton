@@ -2,9 +2,9 @@ package service
 
 import (
 	"errors"
-	"passontw-slot-game/internal/config"
-	"passontw-slot-game/internal/interfaces"
-	redis "passontw-slot-game/pkg/redisManager"
+	"github.com/yourusername/project/internal/config"
+	"github.com/yourusername/project/internal/interfaces"
+	redis "github.com/yourusername/project/pkg/redisManager"
 	"time"
 
 	"context"

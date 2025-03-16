@@ -1,7 +1,7 @@
 package service
 
 import (
-	"passontw-slot-game/pkg/databaseManager"
+	"github.com/yourusername/project/pkg/databaseManager"
 
 	"gorm.io/gorm"
 )

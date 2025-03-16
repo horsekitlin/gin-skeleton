@@ -3,7 +3,7 @@ package redis
 import (
 	"context"
 	"fmt"
-	"passontw-slot-game/internal/config"
+	"github.com/yourusername/project/internal/config"
 	"time"
 
 	"github.com/redis/go-redis/v9"

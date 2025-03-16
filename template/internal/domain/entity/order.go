@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"passontw-slot-game/pkg/utils"
+	"github.com/yourusername/project/pkg/utils"
 	"time"
 
 	"github.com/lib/pq"

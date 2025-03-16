@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"passontw-slot-game/internal/interfaces/types"
+	"github.com/yourusername/project/internal/interfaces/types"
 )
 
 const (

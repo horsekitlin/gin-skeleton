@@ -2,7 +2,7 @@ package utils
 
 import (
 	"fmt"
-	"passontw-slot-game/internal/interfaces/types"
+	"github.com/yourusername/project/internal/interfaces/types"
 )
 
 // 示例請求結構體

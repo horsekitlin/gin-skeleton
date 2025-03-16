@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"net/http"
-	"passontw-slot-game/internal/service"
+	"github.com/yourusername/project/internal/service"
 	"strings"
 
 	"github.com/gin-gonic/gin"
