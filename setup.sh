@@ -12,6 +12,7 @@ PROJECT_NAME=""
 OS_TYPE=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 TEMPLATE_DIR="${SCRIPT_DIR}/template"
+TMP_DIR="${SCRIPT_DIR}/.tmp_template"
 
 # 印出帶顏色的訊息
 print_step() {
@@ -64,6 +65,16 @@ check_requirements() {
     print_info "所有必要的命令都存在"
 }
 
+# 清理函數 - 用於退出前清理臨時文件
+cleanup_on_exit() {
+    if [ -d "$TMP_DIR" ]; then
+        rm -rf "$TMP_DIR"
+    fi
+}
+
+# 捕捉退出信號，確保清理臨時文件
+trap cleanup_on_exit EXIT
+
 # 驗證 template 目錄是否存在
 check_template_dir() {
     print_step "檢查模板目錄..."
@@ -103,14 +114,78 @@ read_project_name() {
     print_info "專案名稱設定為: $PROJECT_NAME"
 }
 
-# 複製模板檔案
-copy_template_files() {
-    print_step "複製模板檔案..."
+# 準備模板文件 - 複製到臨時目錄並且進行替換
+prepare_template_files() {
+    print_step "準備模板檔案..."
     
-    # 使用當前目錄作為目標目錄
+    # 創建臨時目錄
+    if [ -d "$TMP_DIR" ]; then
+        rm -rf "$TMP_DIR"
+    fi
+    mkdir -p "$TMP_DIR"
+    
+    print_info "正在複製檔案到臨時目錄並進行替換..."
+    
+    # 複製文件到臨時目錄
+    cp -r "$TEMPLATE_DIR"/* "$TMP_DIR"/ 2>/dev/null || true
+    
+    # 定義替換的模式和替換值
+    local patterns=(
+        "github.com/yourusername/project"
+        "github.com/yourusername/shoppingcart"
+        "github.com/yourusername"
+    )
+    
+    local replacements=(
+        "$PROJECT_NAME"
+        "$PROJECT_NAME"
+        "$PROJECT_NAME"
+    )
+    
+    # 定義文件類型
+    local file_types=(
+        "*.go"
+        "*.md"
+        "*.Dockerfile"
+        "docker-compose.yaml"
+        "*.yml"
+        "*.yaml"
+    )
+    
+    # 在臨時目錄中進行替換
+    local total_replacements=0
+    
+    for i in "${!patterns[@]}"; do
+        for ext in "${file_types[@]}"; do
+            local sed_cmd
+            if [ "$OS_TYPE" == "macos" ]; then
+                sed_cmd="sed -i '' -e"
+            else
+                sed_cmd="sed -i -e"
+            fi
+            
+            find "$TMP_DIR" -type f -name "$ext" | while read file; do
+                # 檢查文件是否包含模式
+                if grep -q "${patterns[$i]}" "$file"; then
+                    $sed_cmd "s|${patterns[$i]}|${replacements[$i]}|g" "$file"
+                    let total_replacements++
+                    print_info "  已處理: $(basename "$file")"
+                fi
+            done
+        done
+    done
+    
+    print_info "模板準備完成，進行了 $total_replacements 次替換"
+}
+
+# 複製處理過的模板文件到目標目錄
+copy_prepared_files() {
+    print_step "複製準備好的檔案到專案目錄..."
+    
+    # 目標是當前目錄
     local target_dir="$SCRIPT_DIR"
     
-    # 檢查是否有重要文件可能被覆蓋
+    # 複製文件前檢查是否有衝突
     local important_files=(
         "main.go"
         "go.mod"
@@ -120,7 +195,7 @@ copy_template_files() {
     
     local existing_files=0
     for file in "${important_files[@]}"; do
-        if [ -e "$target_dir/$file" ]; then
+        if [ -e "$target_dir/$file" ] && [ "$file" != "README.md" ]; then
             let existing_files++
         fi
     done
@@ -134,37 +209,23 @@ copy_template_files() {
         fi
     fi
     
-    # 複製所有模板檔案和目錄（排除.git目錄）
-    print_info "正在複製檔案到 $target_dir..."
-    
-    # 複製目錄結構
-    find "$TEMPLATE_DIR" -type d -not -path "$TEMPLATE_DIR/.git*" | while read dir; do
-        rel_dir="${dir#$TEMPLATE_DIR/}"
-        if [ ! -z "$rel_dir" ]; then
-            mkdir -p "$target_dir/$rel_dir"
+    # 複製文件到目標目錄
+    find "$TMP_DIR" -type f | while read file; do
+        rel_path="${file#$TMP_DIR/}"
+        target="$target_dir/$rel_path"
+        
+        # 確保目標目錄存在
+        mkdir -p "$(dirname "$target")"
+        
+        # 複製文件，但避免覆蓋 README.md 如果它已存在
+        if [[ "$rel_path" == "README.md" && -f "$target" ]]; then
+            print_info "  已跳過: $rel_path (避免覆蓋)"
+        else
+            cp "$file" "$target"
+            print_info "  已複製: $rel_path"
         fi
     done
     
-    # 複製文件 (排除 setup.sh 和 README.md 避免覆蓋)
-    find "$TEMPLATE_DIR" -type f -not -path "$TEMPLATE_DIR/.git*" | while read file; do
-        rel_file="${file#$TEMPLATE_DIR/}"
-        base_name=$(basename "$file")
-        
-        # 跳過某些文件以避免覆蓋原始檔案
-        if [[ "$base_name" == "setup.sh" || ("$base_name" == "README.md" && -f "$target_dir/README.md") ]]; then
-            print_info "  已跳過: $rel_file (避免覆蓋)"
-            continue
-        fi
-        
-        if [ ! -z "$rel_file" ]; then
-            cp "$file" "$target_dir/$rel_file"
-            print_info "  已複製: $rel_file"
-        fi
-    done
-    
-    # 切換到目標目錄
-    cd "$target_dir"
-    print_info "切換工作目錄到: $(pwd)"
     print_info "檔案複製完成"
 }
 
@@ -186,58 +247,6 @@ init_go_module() {
     fi
     
     print_info "Go 模組初始化完成"
-}
-
-# 替換所有檔案中的路徑
-replace_import_paths() {
-    print_step "替換所有檔案中的匯入路徑..."
-    
-    local sed_cmd
-    if [ "$OS_TYPE" == "macos" ]; then
-        sed_cmd="sed -i ''"
-    else
-        sed_cmd="sed -i"
-    fi
-    
-    local patterns=(
-        "github.com/yourusername/project"
-        "github.com/yourusername/shoppingcart"
-        "github.com/yourusername"
-    )
-    
-    local replacements=(
-        "$PROJECT_NAME"
-        "$PROJECT_NAME"
-        "$PROJECT_NAME"
-    )
-    
-    local file_types=(
-        "*.go"
-        "*.Dockerfile"
-        "docker-compose.yaml"
-        "*.yml"
-        "*.yaml"
-        "*.md"
-    )
-    
-    local total_replacements=0
-    local total_files=0
-    
-    for i in "${!patterns[@]}"; do
-        for ext in "${file_types[@]}"; do
-            find . -type f -name "$ext" | while read file; do
-                # 檢查文件是否包含模式
-                if grep -q "${patterns[$i]}" "$file"; then
-                    $sed_cmd "s|${patterns[$i]}|${replacements[$i]}|g" "$file"
-                    let total_replacements++
-                    print_info "  已更新: $file"
-                fi
-                let total_files++
-            done
-        done
-    done
-    
-    print_info "匯入路徑替換完成，處理了 $total_files 個檔案，進行了 $total_replacements 次替換"
 }
 
 # 檢查是否有未替換的匯入路徑
@@ -288,6 +297,42 @@ install_dependencies() {
     fi
 }
 
+# 初始化 Swagger 文檔（可選）
+init_swagger() {
+    print_step "檢查是否初始化 Swagger 文檔..."
+    
+    if command -v swag &> /dev/null; then
+        echo -n "是否立即初始化 Swagger 文檔？(y/n): "
+        read answer
+        
+        if [[ "$answer" == "y" || "$answer" == "Y" ]]; then
+            print_info "正在初始化 Swagger 文檔..."
+            
+            # 檢查 swaggo/swag 版本，以修復可能的版本兼容性問題
+            go get -u github.com/swaggo/swag/cmd/swag
+            go get -u github.com/swaggo/gin-swagger
+            go get -u github.com/swaggo/files
+            
+            # 重新整理 go.mod
+            go mod tidy
+            
+            # 初始化 swagger 文檔
+            swag init -g main.go
+            
+            if [ $? -ne 0 ]; then
+                print_warning "Swagger 文檔初始化失敗，請稍後手動執行 'swag init -g main.go'"
+            else
+                print_info "Swagger 文檔初始化成功"
+            fi
+        else
+            print_info "跳過 Swagger 初始化，您可以稍後手動執行 'swag init -g main.go'"
+        fi
+    else
+        print_warning "未找到 swag 命令，如需使用 Swagger 文檔，請先安裝："
+        print_info "go install github.com/swaggo/swag/cmd/swag@latest"
+    fi
+}
+
 # 顯示完成訊息
 show_completion() {
     print_step "專案設定完成！"
@@ -295,11 +340,13 @@ show_completion() {
     print_info "專案位置: $(pwd)"
     print_info "專案結構:"
     
-    # 顯示目錄結構
-    find . -type d -not -path "*/\.*" | sort | while read dir; do
-        depth=$(echo "$dir" | tr -cd '/' | wc -c)
-        indent=$(printf '%*s' $((depth*2)) '')
-        echo "  $indent${dir##*/}"
+    # 顯示目錄結構 (排除隱藏目錄和 template 目錄)
+    find . -type d -not -path "*/\.*" -not -path "./template*" | sort | while read dir; do
+        if [ "$dir" != "." ]; then
+            depth=$(echo "$dir" | tr -cd '/' | wc -c)
+            indent=$(printf '%*s' $((depth*2)) '')
+            echo "  $indent${dir##*/}"
+        fi
     done
     
     print_info "專案已建立，可以開始開發了"
@@ -313,20 +360,29 @@ cleanup_script_and_template() {
     echo -n "設定已完成，是否刪除 setup.sh 和 template 目錄？(y/n): "
     read answer
     
+    local delete_cmd=""
+    
     if [[ "$answer" == "y" || "$answer" == "Y" ]]; then
         print_info "正在刪除 setup.sh..."
-        # 使用變數存儲命令，以便最後執行
-        DELETE_COMMAND="rm \"$SCRIPT_DIR/setup.sh\""
+        delete_cmd="rm \"$SCRIPT_DIR/setup.sh\""
         
         if [ -d "$TEMPLATE_DIR" ]; then
             print_info "正在刪除 template 目錄..."
-            DELETE_COMMAND="$DELETE_COMMAND && rm -rf \"$TEMPLATE_DIR\""
+            delete_cmd="$delete_cmd && rm -rf \"$TEMPLATE_DIR\""
+        fi
+        
+        # 確保臨時目錄也被刪除
+        if [ -d "$TMP_DIR" ]; then
+            delete_cmd="$delete_cmd && rm -rf \"$TMP_DIR\""
         fi
         
         print_info "清理完成"
     else
         print_info "保留 setup.sh 和 template 目錄"
     fi
+    
+    # 返回刪除命令以便稍後執行
+    echo "$delete_cmd"
 }
 
 # 主程序
@@ -340,13 +396,15 @@ main() {
     check_requirements
     check_template_dir
     read_project_name
-    copy_template_files
+    prepare_template_files
+    copy_prepared_files
     init_go_module
-    replace_import_paths
     check_import_paths
     install_dependencies
+    init_swagger
     show_completion
-    cleanup_script_and_template
+    
+    DELETE_COMMAND=$(cleanup_script_and_template)
     
     echo ""
     print_info "感謝使用 Go 微服務專案設定嚮導！"
@@ -354,8 +412,8 @@ main() {
     # 如果需要刪除自身和模板目錄，使用子 shell 執行
     if [ -n "$DELETE_COMMAND" ]; then
         print_info "腳本將在顯示此消息後自行清理..."
-        # 使用eval執行命令或使用bash -c
-        (eval "$DELETE_COMMAND") &
+        # 使用新的子進程執行，避免刪除當前執行的腳本出現問題
+        (sleep 1 && eval "$DELETE_COMMAND") &
     fi
 }
 
