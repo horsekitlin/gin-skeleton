@@ -107,22 +107,32 @@ read_project_name() {
 copy_template_files() {
     print_step "複製模板檔案..."
     
-    # 創建臨時目錄用於複製文件
-    local target_dir="$SCRIPT_DIR/project"
+    # 使用當前目錄作為目標目錄
+    local target_dir="$SCRIPT_DIR"
     
-    # 如果目標目錄已存在，詢問是否覆蓋
-    if [ -d "$target_dir" ]; then
-        echo -n "目標目錄 'project' 已存在，是否覆蓋？(y/n): "
+    # 檢查是否有重要文件可能被覆蓋
+    local important_files=(
+        "main.go"
+        "go.mod"
+        "internal"
+        "pkg"
+    )
+    
+    local existing_files=0
+    for file in "${important_files[@]}"; do
+        if [ -e "$target_dir/$file" ]; then
+            let existing_files++
+        fi
+    done
+    
+    if [ $existing_files -gt 0 ]; then
+        echo -n "當前目錄已包含一些重要文件，複製操作可能會覆蓋它們。是否繼續？(y/n): "
         read answer
         if [[ "$answer" != "y" && "$answer" != "Y" ]]; then
             print_info "操作取消"
             exit 0
         fi
-        rm -rf "$target_dir"
     fi
-    
-    # 創建目標目錄
-    mkdir -p "$target_dir"
     
     # 複製所有模板檔案和目錄（排除.git目錄）
     print_info "正在複製檔案到 $target_dir..."
@@ -135,9 +145,17 @@ copy_template_files() {
         fi
     done
     
-    # 複製文件
+    # 複製文件 (排除 setup.sh 和 README.md 避免覆蓋)
     find "$TEMPLATE_DIR" -type f -not -path "$TEMPLATE_DIR/.git*" | while read file; do
         rel_file="${file#$TEMPLATE_DIR/}"
+        base_name=$(basename "$file")
+        
+        # 跳過某些文件以避免覆蓋原始檔案
+        if [[ "$base_name" == "setup.sh" || ("$base_name" == "README.md" && -f "$target_dir/README.md") ]]; then
+            print_info "  已跳過: $rel_file (避免覆蓋)"
+            continue
+        fi
+        
         if [ ! -z "$rel_file" ]; then
             cp "$file" "$target_dir/$rel_file"
             print_info "  已複製: $rel_file"
@@ -288,6 +306,29 @@ show_completion() {
     print_info "您可以使用命令 'go run ./main.go' 運行專案"
 }
 
+# 清理腳本和模板目錄
+cleanup_script_and_template() {
+    print_step "清理腳本和模板目錄..."
+    
+    echo -n "設定已完成，是否刪除 setup.sh 和 template 目錄？(y/n): "
+    read answer
+    
+    if [[ "$answer" == "y" || "$answer" == "Y" ]]; then
+        print_info "正在刪除 setup.sh..."
+        # 使用變數存儲命令，以便最後執行
+        DELETE_COMMAND="rm \"$SCRIPT_DIR/setup.sh\""
+        
+        if [ -d "$TEMPLATE_DIR" ]; then
+            print_info "正在刪除 template 目錄..."
+            DELETE_COMMAND="$DELETE_COMMAND && rm -rf \"$TEMPLATE_DIR\""
+        fi
+        
+        print_info "清理完成"
+    else
+        print_info "保留 setup.sh 和 template 目錄"
+    fi
+}
+
 # 主程序
 main() {
     echo -e "${GREEN}=================================${NC}"
@@ -305,9 +346,17 @@ main() {
     check_import_paths
     install_dependencies
     show_completion
+    cleanup_script_and_template
     
     echo ""
     print_info "感謝使用 Go 微服務專案設定嚮導！"
+    
+    # 如果需要刪除自身和模板目錄，使用子 shell 執行
+    if [ -n "$DELETE_COMMAND" ]; then
+        print_info "腳本將在顯示此消息後自行清理..."
+        # 使用eval執行命令或使用bash -c
+        (eval "$DELETE_COMMAND") &
+    fi
 }
 
 # 捕捉中斷信號
