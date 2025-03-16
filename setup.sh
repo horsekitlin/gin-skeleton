@@ -39,22 +39,12 @@ detect_os() {
 # 檢查必要的命令是否存在
 check_requirements() {
     print_step "檢查必要的命令..."
-    
-    if ! command -v go &> /dev/null; then
-        print_error "go 命令不存在，請安裝 Go"
-        exit 1
-    fi
-    
-    if ! command -v find &> /dev/null; then
-        print_error "find 命令不存在"
-        exit 1
-    fi
-    
-    if ! command -v grep &> /dev/null; then
-        print_error "grep 命令不存在"
-        exit 1
-    fi
-    
+    for cmd in go find grep; do
+        if ! command -v $cmd &> /dev/null; then
+            print_error "$cmd 命令不存在"
+            exit 1
+        fi
+    done
     print_info "所有必要的命令都存在"
 }
 
@@ -71,34 +61,37 @@ read_project_name() {
     print_info "專案名稱設定為: $project_name"
 }
 
-# 將 template 目錄下的檔案移到上一層
-move_template_files() {
-    print_step "將 template 目錄下的檔案移動到上一層..."
+# 複製模板檔案
+copy_template_files() {
+    print_step "複製模板檔案..."
     
     if [ ! -d "template" ]; then
         print_error "template 目錄不存在"
         exit 1
     fi
     
-    # 確保目標目錄存在
-    mkdir -p cmd internal pkg deployments
+    find template -type d -not -path "template" -not -path "template/.git*" | while read dir; do
+        target_dir="${dir#template/}"
+        if [ ! -z "$target_dir" ]; then
+            mkdir -p "$target_dir"
+        fi
+    done
     
-    # 移動檔案
-    cp -r template/cmd/* cmd/
-    cp -r template/internal/* internal/
-    cp -r template/pkg/* pkg/
-    cp -r template/deployments/* deployments/
+    find template -type f -not -path "template/.git*" | while read file; do
+        target_file="${file#template/}"
+        if [ ! -z "$target_file" ]; then
+            cp "$file" "$target_file"
+        else
+            cp "$file" ./
+        fi
+    done
     
-    # 移動根目錄下其他檔案
-    find template -maxdepth 1 -type f -exec cp {} . \;
-    
-    print_info "檔案移動完成"
+    print_info "檔案複製完成"
 }
 
 # 初始化 Go 模組
 init_go_module() {
     print_step "初始化 Go 模組為 $project_name..."
-    
     go mod init $project_name
     
     if [ $? -ne 0 ]; then
@@ -113,43 +106,40 @@ init_go_module() {
 replace_import_paths() {
     print_step "替換所有檔案中的匯入路徑..."
     
-    # 處理所有 .go 文件
-    find . -type f -name "*.go" | while read file; do
-        if [ "$OS_TYPE" == "macos" ]; then
-            # macOS 使用 BSD sed
-            sed -i '' "s|github.com/yourusername/project|$project_name|g" "$file"
-            sed -i '' "s|github.com/yourusername/shoppingcart|$project_name|g" "$file"
-        else
-            # Linux 使用 GNU sed
-            sed -i "s|github.com/yourusername/project|$project_name|g" "$file"
-            sed -i "s|github.com/yourusername/shoppingcart|$project_name|g" "$file"
-        fi
-        print_info "已處理: $file"
-    done
-    
-    # 處理所有 Dockerfile 文件
-    find ./deployments -type f -name "*.Dockerfile" | while read file; do
-        if [ "$OS_TYPE" == "macos" ]; then
-            sed -i '' "s|github.com/yourusername/project|$project_name|g" "$file"
-            sed -i '' "s|github.com/yourusername/shoppingcart|$project_name|g" "$file"
-        else
-            sed -i "s|github.com/yourusername/project|$project_name|g" "$file"
-            sed -i "s|github.com/yourusername/shoppingcart|$project_name|g" "$file"
-        fi
-        print_info "已處理: $file"
-    done
-    
-    # 處理 docker-compose.yaml
-    if [ -f "./deployments/docker/docker-compose.yaml" ]; then
-        if [ "$OS_TYPE" == "macos" ]; then
-            sed -i '' "s|github.com/yourusername/project|$project_name|g" "./deployments/docker/docker-compose.yaml"
-            sed -i '' "s|github.com/yourusername/shoppingcart|$project_name|g" "./deployments/docker/docker-compose.yaml"
-        else
-            sed -i "s|github.com/yourusername/project|$project_name|g" "./deployments/docker/docker-compose.yaml"
-            sed -i "s|github.com/yourusername/shoppingcart|$project_name|g" "./deployments/docker/docker-compose.yaml"
-        fi
-        print_info "已處理: ./deployments/docker/docker-compose.yaml"
+    local sed_cmd
+    if [ "$OS_TYPE" == "macos" ]; then
+        sed_cmd="sed -i ''"
+    else
+        sed_cmd="sed -i"
     fi
+    
+    local patterns=(
+        "github.com/yourusername/project"
+        "github.com/yourusername/shoppingcart"
+        "\"github.com/yourusername"
+    )
+    
+    local replacements=(
+        "$project_name"
+        "$project_name"
+        "\"$project_name"
+    )
+    
+    local file_types=(
+        "*.go"
+        "*.Dockerfile"
+        "docker-compose.yaml"
+        "*.yml"
+        "*.yaml"
+    )
+    
+    for i in "${!patterns[@]}"; do
+        for ext in "${file_types[@]}"; do
+            find . -type f -name "$ext" -not -path "./template/*" | while read file; do
+                $sed_cmd "s|${patterns[$i]}|${replacements[$i]}|g" "$file"
+            done
+        done
+    done
     
     print_info "匯入路徑替換完成"
 }
@@ -158,35 +148,11 @@ replace_import_paths() {
 check_import_paths() {
     print_step "檢查是否有未替換的匯入路徑..."
     
-    # 檢查是否有未替換的 import 路徑
-    UNFIXED_IMPORTS=$(grep -r "github.com/yourusername" --include="*.go" . || true)
+    UNFIXED_IMPORTS=$(grep -r "github.com/yourusername" --include="*.go" . --exclude-dir=template || true)
     
     if [ -n "$UNFIXED_IMPORTS" ]; then
-        print_warning "存在未替換的匯入路徑，嘗試再次替換..."
-        
-        # 再次嘗試替換
-        find . -type f -name "*.go" | while read file; do
-            if [ "$OS_TYPE" == "macos" ]; then
-                sed -i '' "s|github.com/yourusername/project|$project_name|g" "$file"
-                sed -i '' "s|github.com/yourusername/shoppingcart|$project_name|g" "$file"
-                # 添加更多可能的模式以防萬一
-                sed -i '' "s|\"github.com/yourusername|\"$project_name|g" "$file"
-            else
-                sed -i "s|github.com/yourusername/project|$project_name|g" "$file"
-                sed -i "s|github.com/yourusername/shoppingcart|$project_name|g" "$file"
-                # 添加更多可能的模式以防萬一
-                sed -i "s|\"github.com/yourusername|\"$project_name|g" "$file"
-            fi
-        done
-        
-        # 再次檢查
-        UNFIXED_IMPORTS=$(grep -r "github.com/yourusername" --include="*.go" . || true)
-        if [ -n "$UNFIXED_IMPORTS" ]; then
-            print_warning "仍有部分匯入路徑未替換，可能需要手動檢查："
-            echo "$UNFIXED_IMPORTS"
-        else
-            print_info "所有匯入路徑已替換成功"
-        fi
+        print_warning "仍有部分匯入路徑未替換，可能需要手動檢查："
+        echo "$UNFIXED_IMPORTS"
     else
         print_info "所有匯入路徑已替換成功"
     fi
@@ -195,7 +161,6 @@ check_import_paths() {
 # 安裝依賴套件
 install_dependencies() {
     print_step "安裝依賴套件..."
-    
     go mod tidy
     
     if [ $? -ne 0 ]; then
@@ -210,18 +175,13 @@ show_completion() {
     print_step "專案設定完成！"
     print_info "專案名稱: $project_name"
     print_info "專案結構已建立，可以開始開發了"
-    print_info "您可以使用以下命令運行 API 網關:"
-    print_info "  go run ./cmd/api-gateway/main.go"
-    print_info "以及用戶服務:"
-    print_info "  go run ./cmd/user-service/main.go"
+    print_info "您可以使用命令 'go run ./main.go' 運行專案"
 }
 
 # 清理 template 目錄
 cleanup() {
     print_step "清理 template 目錄..."
-    
     rm -rf template
-    
     print_info "清理完成"
 }
 
@@ -235,7 +195,7 @@ main() {
     detect_os
     check_requirements
     read_project_name
-    move_template_files
+    copy_template_files
     init_go_module
     replace_import_paths
     check_import_paths
