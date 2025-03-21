@@ -2,8 +2,9 @@ package middleware
 
 import (
 	"net/http"
-	"github.com/yourusername/project/internal/service"
 	"strings"
+
+	"github.com/yourusername/project/internal/service"
 
 	"github.com/gin-gonic/gin"
 )

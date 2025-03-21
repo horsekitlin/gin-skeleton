@@ -2,9 +2,10 @@ package handler
 
 import (
 	"net/http"
+	"strings"
+
 	"github.com/yourusername/project/internal/interfaces"
 	"github.com/yourusername/project/internal/service"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 )

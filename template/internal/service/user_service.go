@@ -2,9 +2,10 @@ package service
 
 import (
 	"errors"
+	"time"
+
 	"github.com/yourusername/project/internal/config"
 	"github.com/yourusername/project/internal/interfaces"
-	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"

@@ -2,8 +2,9 @@ package handler
 
 import (
 	"net/http"
-	"github.com/yourusername/project/internal/service"
 	"strconv"
+
+	"github.com/yourusername/project/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
